@@ -1,6 +1,10 @@
 import click
 import json
 import boto3
+import botocore
+import paramiko
+
+
 
 @click.group()
 def ec2():
@@ -24,6 +28,7 @@ def list_instances():
         print(instance.public_ip_address, end="\t")
         print(instance.state.get("Name"))
 
+
 client = boto3.client('ec2')
 @ec2.command()
 @click.argument('instanceid')
@@ -43,9 +48,54 @@ def stop_instance(my_instance_id):
     current_state = stop[0].get("CurrentState").get("Name")
     print(current_state)
 
+def get_keypath():
+    fptr = open("path.json")
+    key_path = json.load(fptr).get("path")
+    fptr.close()
+    return key_path
+
+@ec2.command()
+@click.argument('ip_address')
+def ssh_instance(ip_address):
+    key_path = get_keypath()
+    key = paramiko.RSAKey.from_private_key_file(key_path)
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    
+    try:      
+        client.connect(hostname=ip_address , username="ubuntu", pkey=key)
+        print("Connected!")
+        
+        while True:
+            cmd = input("$ ")
+            if cmd == "exit":
+                break
+
+            stdin, stdout, stderr = client.exec_command(cmd)
+           
+            std_out = stdout.read().decode('utf-8')[:-1]
+            # print("Type of output", type(std_out))
+            # print("stdout", std_out == '')
+
+            std_err = stderr.read().decode('utf-8')[:-1]
+            # print("Type of output", type(std_err))
+            # print("stderr", std_err == '')
+
+            if std_out == "":
+                print(std_err)
+            else:
+                print(std_out)
+
+        client.close()
+    
+    except Exception as e:
+        traceback.print_exc(e)
+
+
 
 if __name__ == "__main__":
     ec2() 
+
 
 
  
